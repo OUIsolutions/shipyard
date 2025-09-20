@@ -1,4 +1,3 @@
-## Usage 
 
 
 ## Build from Source
@@ -43,3 +42,29 @@ cd shipyard
 ```bash
 vibescript add_script --file shipyard.lua shipyard
 ```
+
+## Usage 
+to make a release, first create a **release.json** file in the following format: 
+```json 
+{
+   "replacers":{
+       "BIG_VERSION":"0",
+       "SMALL_VERSION":"1",
+       "PATCH_VERSION":"0"
+   },
+   "release": "{BIG_VERSION}.{SMALL_VERSION}.{PATCH_VERSION}",
+   "tag": "{BIG_VERSION}.{SMALL_VERSION}.{PATCH_VERSION}",
+    "description": "description of the release",
+    "assets": ["path/to/asset1", "path/to/asset2"]
+}
+```
+then you can run the following command: 
+```bash 
+shipyard release.json
+```
+note that:
+if  the tag not exist, it will be created, otherwise, it will be updated.
+if the assets already exist, they will be replaced.
+
+
+
