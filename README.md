@@ -98,6 +98,20 @@ Run the following command in your project directory:
 shipyard release.json
 ```
 
+### Showing Help
+
+You can display usage instructions with:
+
+```bash
+shipyard --help
+```
+
+Or the shorthand:
+
+```bash
+shipyard -h
+```
+
 ### Configuration Options
 
 | Field | Description | Required |
