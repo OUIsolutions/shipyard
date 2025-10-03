@@ -1,7 +1,7 @@
 -- ============================================
 -- PRIVATE API - Internal Functions
 -- ============================================
-PRIVATE_SHIPYARD_API = {}
+local PRIVATE_SHIPYARD_API = {}
 
 PRIVATE_SHIPYARD_API.file_exists = function(path)
     local f = io.open(path, "r")
@@ -90,7 +90,7 @@ end
 -- ============================================
 -- PUBLIC API - Exposed Functions
 -- ============================================
-SHIPYARD_API = {}
+local SHIPYARD_API = {}
 
 SHIPYARD_API.load_config = function(config_path)
     if not PRIVATE_SHIPYARD_API.file_exists(config_path) then
@@ -353,7 +353,7 @@ end
 -- ============================================
 -- CLI Layer - User Interface Functions
 -- ============================================
-SHIPYARD_CLI = {}
+local SHIPYARD_CLI = {}
 
 SHIPYARD_CLI.print_error = function(message)
     print("❌ ERROR: " .. message)
@@ -626,4 +626,7 @@ function SHIPYARD_CLI.main()
 end
 if is_main_script then 
 SHIPYARD_CLI.main()
-end 
+end
+if not is_main_script then
+    return SHIPYARD_API
+end
