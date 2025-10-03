@@ -206,7 +206,13 @@ end
 local function create_tag(tag, description)
 
     if tag_exists(tag) then
-        return true
+        -- Delete existing tag locally
+        print_info("Deleting existing local tag: " .. tag)
+        execute_command("git tag -d " .. tag)
+        
+        -- Delete existing tag from remote
+        print_info("Deleting existing remote tag: " .. tag)
+        execute_command("git push origin :refs/tags/" .. tag .. " 2>/dev/null")
     end
 
     local cmd = string.format("git tag -a %s -m '%s'", tag, description)
