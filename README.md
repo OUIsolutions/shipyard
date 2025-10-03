@@ -1,81 +1,61 @@
-<div align="center">
-
-# 🚢 Shipyard
-
-**GitHub Release Management Tool for VibeScript**
-
-[![GitHub release](https://img.shields.io/github/release/OUIsolutions/shipyard.svg)](https://github.com/OUIsolutions/shipyard/releases)
-[![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](https://unlicense.org/)
-[![VibeScript](https://img.shields.io/badge/powered%20by-VibeScript-orange.svg)](https://github.com/OUIsolutions/VibeScript)
+# Shipyard
+![VibeScript Logo](https://img.shields.io/badge/VibeScript-0.1.0-blue?style=for-the-badge&logo=lua)
+[![GitHub Release](https://img.shields.io/badge/GitHub-Release-blue?style=for-the-badge)](https://github.com/OUIsolutions/shipyard/releases)
+[![License](https://img.shields.io/badge/License-Unlicense-green.svg?style=for-the-badge)](https://github.com/OUIsolutions/shipyard/blob/main/LICENSE)
+![Status](https://img.shields.io/badge/Status-Stable-brightgreen?style=for-the-badge)
+![Platforms](https://img.shields.io/badge/Platforms-VibeScript-lightgrey?style=for-the-badge)
 
 ---
 
-</div>
+### Overview
 
-## 📋 Overview
+Shipyard is a powerful GitHub release management tool for VibeScript that allows you to automate creating and managing GitHub releases directly from the command line. It provides a template-based system for version management and asset handling:
 
-Shipyard is a powerful GitHub release management tool built for the VibeScript ecosystem. It automates the process of creating and managing GitHub releases with customizable version templating, asset management, and tag handling.
+1. **Install VibeScript runtime**
+2. **Configure Shipyard with your release settings**
+3. **Create releases from anywhere**
 
-## ✨ Key Features
+This tool is designed for developers who want to:
+- Automate GitHub release creation from scripts and CI/CD pipelines
+- Manage version numbers with template-based configuration
+- Upload and manage release assets efficiently
+- Create and update Git tags automatically
 
-- **🔄 Automated Release Creation**: Streamline your GitHub release workflow
-- **📝 Template-Based Versioning**: Use customizable replacers for version management
-- **� Dynamic Replacer Modification**: Update version numbers without manual JSON editing
-- **�📦 Asset Management**: Automatically upload and manage release assets
-- **🏷️ Smart Tag Handling**: Create new tags or update existing ones
-- **⚙️ JSON Configuration**: Simple, declarative configuration format
-- **🔧 VibeScript Integration**: Built specifically for the VibeScript ecosystem
+### Key Features
 
-## 🚀 Installation
+- **Automated Release Creation** - Streamline your GitHub release workflow.
+- **Template-Based Versioning** - Use customizable replacers for version management.
+- **Dynamic Replacer Modification** - Update version numbers without manual JSON editing.
+- **Asset Management** - Automatically upload and manage release assets.
+- **Smart Tag Handling** - Create new tags or update existing ones.
+- **JSON Configuration** - Simple, declarative configuration format.
 
-### Prerequisites
+## Installation
 
-Shipyard requires VibeScript to be installed on your system. Follow the installation guide below:
+### Step 1: Install VibeScript
 
-#### For Linux Users (Recommended)
+Choose the appropriate installation method for your operating system:
 
-**Option A: Pre-compiled Binary**
+#### Option A: Pre-compiled Binary (Linux only)
 ```bash
-curl -L https://github.com/OUIsolutions/VibeScript/releases/download/0.36.0/vibescript.out -o vibescript.out
-chmod +x vibescript.out
-sudo mv vibescript.out /usr/local/bin/vibescript
+curl -L https://github.com/OUIsolutions/VibeScript/releases/download/0.36.0/vibescript.out -o vibescript.out && chmod +x vibescript.out && sudo mv vibescript.out /usr/local/bin/vibescript
 ```
 
-**Option B: Compile from Source**
+#### Option B: Compile from Source (Linux and macOS)
 ```bash
-curl -L https://github.com/OUIsolutions/VibeScript/releases/download/0.36.0/amalgamation.c -o vibescript.c
-gcc vibescript.c -o vibescript.out
-sudo mv vibescript.out /usr/local/bin/vibescript
+curl -L https://github.com/OUIsolutions/VibeScript/releases/download/0.36.0/amalgamation.c -o vibescript.c && gcc vibescript.c -o vibescript.out && sudo mv vibescript.out /usr/local/bin/vibescript
 ```
 
-#### For macOS Users
-
+### Step 2: Install Shipyard
 ```bash
-curl -L https://github.com/OUIsolutions/VibeScript/releases/download/0.36.0/amalgamation.c -o vibescript.c
-gcc vibescript.c -o vibescript.out
-sudo mv vibescript.out /usr/local/bin/vibescript
+vibescript add_script --file https://github.com/OUIsolutions/shipyard/releases/download/0.1.0/shipyard.lua shipyard
 ```
 
-> **Note:** Make sure you have GCC installed. You can install it via Xcode Command Line Tools: `xcode-select --install`
+## Usage
 
-### Installing Shipyard
+Shipyard uses a JSON-based configuration system to manage your GitHub releases. First, set up a release configuration file, then create releases using that configuration.
 
-1. **Clone the Repository**
-```bash
-git clone https://github.com/OUIsolutions/shipyard.git
-cd shipyard
-```
-
-2. **Add to VibeScript Path**
-```bash
-vibescript add_script --file shipyard.lua shipyard
-```
-
-## 📖 Usage
-
-### CLI Mode
-
-#### Configuration
+### Setting Up Configuration
 
 Create a `release.json` file in your project root with the following structure:
 
@@ -93,234 +73,60 @@ Create a `release.json` file in your project root with the following structure:
 }
 ```
 
-#### Creating a Release
+### Command Line Options
 
-Run the following command in your project directory:
+#### Create Release Command
+- `<config-file>`: Path to the JSON configuration file (e.g., `release.json`)
 
+#### Modify Replacer Command
+- `--name` or `-n`: The replacer key to modify (required)
+- `--value` or `-v`: The new value for the replacer (required)
+- `--file` or `-f`: Path to configuration file (optional, defaults to `release.json`)
+
+#### Increment/Decrement Replacer Commands
+- `--name` or `-n`: The replacer key to increment/decrement (required)
+- `--file` or `-f`: Path to configuration file (optional, defaults to `release.json`)
+
+### Example Usage
+
+#### Create a release
 ```bash
 shipyard release.json
 ```
 
-#### Modifying Replacers
-
-Update version numbers or other replacer values without manually editing the JSON file:
-
+#### Modify a replacer value
 ```bash
-# Modify a replacer in the default release.json
 shipyard modify_replacer --name BIG_VERSION --value 1
-
-# Modify a replacer in a specific config file
-shipyard modify_replacer --name PATCH_VERSION --value 5 --file devops/release.json
 ```
 
-**Options:**
-- `--name <KEY>`: The replacer key to modify (required)
-- `--value <VALUE>`: The new value for the replacer (required)
-- `--file <config-file>`: Path to configuration file (optional, defaults to `release.json`)
-
-#### Showing Help
-
-You can display usage instructions with:
-
+#### Increment the patch version
 ```bash
-shipyard --help
+shipyard increment_replacer --name PATCH_VERSION
 ```
 
-Or the shorthand:
-
+#### Decrement a build number
 ```bash
-shipyard -h
+shipyard decrement_replacer --name BUILD_NUMBER --file devops/release.json
 ```
 
-### API Mode
-
-You can use Shipyard programmatically in your VibeScript projects.
-
-#### Setup
-
-First, install Shipyard as a global module:
-
+#### Using short flags
 ```bash
-vibescript add_script --file shipyard.lua shipyard
+shipyard modify_replacer -n PATCH_VERSION -v 5 -f release.json
 ```
 
-#### Loading the Module
+### Configuration File Format
 
-In your VibeScript code, load Shipyard as a global module:
+The configuration file uses JSON with these fields:
 
-```lua
-local shipyard = load_global_module("shipyard")
-```
+- **replacers** (required): Key-value pairs for template substitution
+- **release** (required): Release name template using `{KEY}` syntax
+- **tag** (required): Git tag template using `{KEY}` syntax
+- **description** (required): Release description (supports template variables)
+- **assets** (optional): Array of file paths to upload
 
-#### API Functions
 
-All API functions raise errors on failure. Use `pcall` to handle errors gracefully.
-
-##### `shipyard.generate_release_from_json(config_path)`
-
-Creates a GitHub release based on a configuration file.
-
-```lua
-local success, err = pcall(shipyard.generate_release_from_json, "release.json")
-if not success then
-    print("Error: " .. err)
-    return
-end
-print("Release created successfully!")
-```
-
-##### `shipyard.modify_replacer(config_path, key, value)`
-
-Modifies a replacer value in the configuration file and returns a data table with `{key, old_value, new_value}`.
-
-```lua
-local success, data = pcall(shipyard.modify_replacer, "release.json", "PATCH_VERSION", "5")
-if not success then
-    print("Error: " .. data)
-    return
-end
-print("Replacer updated successfully!")
-print("Old value: " .. data.old_value .. ", New value: " .. data.new_value)
-```
-
-##### `shipyard.increment_replacer(config_path, key)`
-
-Increments a numeric replacer value and returns a data table with `{key, old_value, new_value}`.
-
-```lua
-local success, data = pcall(shipyard.increment_replacer, "release.json", "PATCH_VERSION")
-if not success then
-    print("Error: " .. data)
-    return
-end
-print("Replacer incremented successfully!")
-print("Old value: " .. data.old_value .. ", New value: " .. data.new_value)
-```
-
-##### `shipyard.decrement_replacer(config_path, key)`
-
-Decrements a numeric replacer value and returns a data table with `{key, old_value, new_value}`.
-
-```lua
-local success, data = pcall(shipyard.decrement_replacer, "release.json", "BUILD_NUMBER")
-if not success then
-    print("Error: " .. data)
-    return
-end
-print("Replacer decremented successfully!")
-print("Old value: " .. data.old_value .. ", New value: " .. data.new_value)
-```
-
-#### Example: Automated Release Script
-
-```lua
-local shipyard = load_global_module("shipyard")
-
--- Increment patch version
-local success, result = pcall(shipyard.increment_replacer, "release.json", "PATCH_VERSION")
-if not success then
-    print("❌ Failed to increment version: " .. result)
-    os.exit(1)
-end
-
--- Create the release
-success, result = pcall(shipyard.generate_release_from_json, "release.json")
-if not success then
-    print("❌ Failed to create release: " .. result)
-    os.exit(1)
-end
-
-print("✅ Release created successfully!")
-```
-
-### Configuration Options
-
-| Field | Description | Required |
-|-------|-------------|----------|
-| `replacers` | Key-value pairs for template replacement | ✅ |
-| `release` | Release name template using replacer variables | ✅ |
-| `tag` | Git tag template using replacer variables | ✅ |
-| `description` | Release description/changelog | ✅ |
-| `assets` | Array of file paths to upload as release assets | ❌ |
-
-### Behavior Notes
-
-- **Tag Management**: If the specified tag doesn't exist, it will be created. If it exists, the release will be updated.
-- **Asset Handling**: Existing assets with the same name will be replaced with new versions.
-- **Template System**: Use `{VARIABLE_NAME}` syntax in release and tag fields to reference replacer values.
-
-## 🔧 Examples
-
-### Basic Release
-
-```json
-{
-   "replacers": {
-       "VERSION": "1.0.0"
-   },
-   "release": "v{VERSION}",
-   "tag": "v{VERSION}",
-   "description": "Initial release with core functionality"
-}
-```
-
-### Advanced Release with Assets
-
-```json
-{
-   "replacers": {
-       "MAJOR": "2",
-       "MINOR": "1",
-       "PATCH": "3",
-       "BUILD": "release"
-   },
-   "release": "Version {MAJOR}.{MINOR}.{PATCH}-{BUILD}",
-   "tag": "{MAJOR}.{MINOR}.{PATCH}",
-   "description": "Bug fixes and performance improvements",
-   "assets": [
-       "dist/shipyard-linux.tar.gz",
-       "dist/shipyard-macos.tar.gz",
-       "CHANGELOG.md"
-   ]
-}
-```
-
-### Workflow Example: Releasing a Patch
-
-```bash
-# 1. Modify the patch version
-shipyard modify_replacer --name PATCH_VERSION --value 1
-
-# 2. Create and publish the release
-shipyard release.json
-```
-
-### Workflow Example: Bumping Major Version
-
-```bash
-# Update major version and reset minor/patch
-shipyard modify_replacer --name BIG_VERSION --value 2
-shipyard modify_replacer --name SMALL_VERSION --value 0
-shipyard modify_replacer --name PATCH_VERSION --value 0
-
-# Create the release
-shipyard release.json
-```
-
-## 📚 Documentation
-
-For comprehensive documentation and advanced usage examples, visit:
-
-- [VibeScript Documentation](https://github.com/OUIsolutions/VibeScript)
-- [GitHub API Documentation](https://docs.github.com/en/rest/releases)
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+---
 
 ## 📄 License
 
 This project is released into the public domain under the [Unlicense](LICENSE).
-
----
-
