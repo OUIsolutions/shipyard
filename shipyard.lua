@@ -1,20 +1,9 @@
 -- ============================================
--- Utils
+-- PRIVATE API - Internal Functions
 -- ============================================
+PRIVATE_SHIPYARD_API = {}
 
-local function print_error(message)
-    print("❌ ERROR: " .. message)
-end
-
-local function print_success(message)
-    print("✅ " .. message)
-end
-
-local function print_info(message)
-    print("ℹ️  " .. message)
-end
-
-local function file_exists(path)
+PRIVATE_SHIPYARD_API.file_exists = function(path)
     local f = io.open(path, "r")
     if f then
         f:close()
@@ -23,7 +12,7 @@ local function file_exists(path)
     return false
 end
 
-local function execute_command(cmd)
+PRIVATE_SHIPYARD_API.execute_command = function(cmd)
     local ok, _, code = os.execute(cmd)
     if not ok then
         return code or 1
@@ -31,7 +20,7 @@ local function execute_command(cmd)
     return code or 0
 end
 
-local function command_succeeded(result)
+PRIVATE_SHIPYARD_API.command_succeeded = function(result)
     if type(result) == "number" then
         return result == 0
     else
@@ -39,39 +28,374 @@ local function command_succeeded(result)
     end
 end
 
--- ============================================
--- Prerequisites Check
--- ============================================
+PRIVATE_SHIPYARD_API.apply_replacers = function(template, replacers)
+    if not template then
+        return nil, "Template is nil"
+    end
 
-local function check_gh_cli()
+    local result = template
+
+    for key, value in pairs(replacers) do
+        local pattern = "{" .. key .. "}"
+        result = string.gsub(result, pattern, tostring(value))
+    end
+
+    -- Check if there are still unresolved variables
+    local unresolved = string.match(result, "{([^}]+)}")
+    if unresolved then
+        return nil, "Undefined variable in template: {" .. unresolved .. "}"
+    end
+
+    return result, nil
+end
+
+PRIVATE_SHIPYARD_API.validate_config = function(config)
+    if not config.replacers then
+        return false, "'replacers' field is required in configuration file"
+    end
+
+    if not config.release then
+        return false, "'release' field is required in configuration file"
+    end
+
+    if not config.tag then
+        return false, "'tag' field is required in configuration file"
+    end
+
+    if not config.description then
+        return false, "'description' field is required in configuration file"
+    end
+
+    return true, nil
+end
+
+PRIVATE_SHIPYARD_API.keys_of_table = function(t)
+    local keys = {}
+    for k, _ in pairs(t) do
+        table.insert(keys, k)
+    end
+    return keys
+end
+
+PRIVATE_SHIPYARD_API.tag_exists = function(tag)
+    local result = PRIVATE_SHIPYARD_API.execute_command("git tag -l " .. tag .. " | grep -q '^" .. tag .. "$'")
+    return result == 0
+end
+
+PRIVATE_SHIPYARD_API.release_exists = function(tag)
+    local result = PRIVATE_SHIPYARD_API.execute_command("gh release view " .. tag .. " > /dev/null 2>&1")
+    return result == 0
+end
+
+-- ============================================
+-- PUBLIC API - Exposed Functions
+-- ============================================
+SHIPYARD_API = {}
+
+SHIPYARD_API.load_config = function(config_path)
+    if not PRIVATE_SHIPYARD_API.file_exists(config_path) then
+        return nil, "Configuration file not found: " .. config_path
+    end
+
+    local config = json.load_from_file(config_path)
+
+    if not config then
+        return nil, "Failed to parse JSON file"
+    end
+
+    return config, nil
+end
+
+SHIPYARD_API.save_config = function(config_path, config)
+    local parsed = json.dumps_to_string(config)
+    dtw.write_file(config_path, parsed)
+    return true, nil
+end
+
+SHIPYARD_API.modify_replacer = function(config_path, key, value)
+    local config, err = SHIPYARD_API.load_config(config_path)
+    if not config then
+        return false, err
+    end
+
+    if not config.replacers then
+        return false, "'replacers' field not found in configuration file"
+    end
+
+    if config.replacers[key] == nil then
+        local keys = PRIVATE_SHIPYARD_API.keys_of_table(config.replacers)
+        return false, "Replacer key '" .. key .. "' not found in configuration file. Available keys: " .. table.concat(keys, ", ")
+    end
+
+    local old_value = config.replacers[key]
+    config.replacers[key] = value
+
+    local success, save_err = SHIPYARD_API.save_config(config_path, config)
+    if not success then
+        return false, save_err
+    end
+
+    return true, nil, {key = key, old_value = old_value, new_value = value}
+end
+
+SHIPYARD_API.increment_replacer = function(config_path, key)
+    local config, err = SHIPYARD_API.load_config(config_path)
+    if not config then
+        return false, err
+    end
+
+    if not config.replacers then
+        return false, "'replacers' field not found in configuration file"
+    end
+
+    if config.replacers[key] == nil then
+        local keys = PRIVATE_SHIPYARD_API.keys_of_table(config.replacers)
+        return false, "Replacer key '" .. key .. "' not found in configuration file. Available keys: " .. table.concat(keys, ", ")
+    end
+
+    local old_value = config.replacers[key]
+    local num_value = tonumber(old_value)
+
+    if not num_value then
+        return false, "Replacer value '" .. tostring(old_value) .. "' is not a valid number. The increment_replacer command only works with numeric values"
+    end
+
+    local new_value = num_value + 1
+    config.replacers[key] = tostring(new_value)
+
+    local success, save_err = SHIPYARD_API.save_config(config_path, config)
+    if not success then
+        return false, save_err
+    end
+
+    return true, nil, {key = key, old_value = old_value, new_value = tostring(new_value)}
+end
+
+SHIPYARD_API.decrement_replacer = function(config_path, key)
+    local config, err = SHIPYARD_API.load_config(config_path)
+    if not config then
+        return false, err
+    end
+
+    if not config.replacers then
+        return false, "'replacers' field not found in configuration file"
+    end
+
+    if config.replacers[key] == nil then
+        local keys = PRIVATE_SHIPYARD_API.keys_of_table(config.replacers)
+        return false, "Replacer key '" .. key .. "' not found in configuration file. Available keys: " .. table.concat(keys, ", ")
+    end
+
+    local old_value = config.replacers[key]
+    local num_value = tonumber(old_value)
+
+    if not num_value then
+        return false, "Replacer value '" .. tostring(old_value) .. "' is not a valid number. The decrement_replacer command only works with numeric values"
+    end
+
+    local new_value = num_value - 1
+    config.replacers[key] = tostring(new_value)
+
+    local success, save_err = SHIPYARD_API.save_config(config_path, config)
+    if not success then
+        return false, save_err
+    end
+
+    return true, nil, {key = key, old_value = old_value, new_value = tostring(new_value)}
+end
+
+SHIPYARD_API.create_tag = function(tag, description)
+    local cmd = string.format("git tag -a %s -m '%s'", tag, description)
+    local result = PRIVATE_SHIPYARD_API.execute_command(cmd)
+
+    if result ~= 0 then
+        return false, "Failed to create tag"
+    end
+
+    -- Push tag to remote repository
+    result = PRIVATE_SHIPYARD_API.execute_command("git push origin " .. tag)
+
+    if result ~= 0 then
+        return false, "Failed to push tag to repository"
+    end
+
+    return true, nil
+end
+
+SHIPYARD_API.ensure_tag_pushed = function(tag)
+    local result = os.execute("git ls-remote --tags origin " .. tag .. " | grep -q " .. tag)
+
+    if result ~= 0 then
+        local push_result = PRIVATE_SHIPYARD_API.execute_command("git push origin " .. tag)
+        if push_result ~= 0 then
+            return false, "Failed to push existing tag to remote repository"
+        end
+    end
+
+    return true, nil
+end
+
+SHIPYARD_API.create_release = function(tag, release_name, description)
+    local escaped_desc = string.gsub(description, '"', '\\"')
+
+    local cmd = string.format('gh release create "%s" --title "%s" --notes "%s"',
+        tag, release_name, escaped_desc)
+
+    local result = PRIVATE_SHIPYARD_API.execute_command(cmd)
+
+    if result ~= 0 then
+        return false, "Failed to create release"
+    end
+
+    return true, nil
+end
+
+SHIPYARD_API.update_release = function(tag, release_name, description)
+    local delete_result = PRIVATE_SHIPYARD_API.execute_command(string.format('gh release delete "%s" -y', tag))
+
+    if delete_result ~= 0 then
+        return false, "Failed to delete existing release"
+    end
+
+    return SHIPYARD_API.create_release(tag, release_name, description)
+end
+
+SHIPYARD_API.upload_assets = function(tag, assets)
+    if not assets or #assets == 0 then
+        return true, nil
+    end
+
+    for _, asset_path in ipairs(assets) do
+        if not PRIVATE_SHIPYARD_API.file_exists(asset_path) then
+            return false, "Asset not found: " .. asset_path
+        end
+
+        local cmd = string.format('gh release upload "%s" "%s" --clobber', tag, asset_path)
+        local result = PRIVATE_SHIPYARD_API.execute_command(cmd)
+
+        if result ~= 0 then
+            return false, "Failed to upload asset: " .. asset_path
+        end
+    end
+
+    return true, nil
+end
+
+SHIPYARD_API.generate_release = function(config)
+    -- Validate configuration
+    local valid, err = PRIVATE_SHIPYARD_API.validate_config(config)
+    if not valid then
+        return false, err
+    end
+
+    -- Apply replacers to templates
+    local release_name, err1 = PRIVATE_SHIPYARD_API.apply_replacers(config.release, config.replacers)
+    if not release_name then
+        return false, err1
+    end
+
+    local tag, err2 = PRIVATE_SHIPYARD_API.apply_replacers(config.tag, config.replacers)
+    if not tag then
+        return false, err2
+    end
+
+    local description, err3 = PRIVATE_SHIPYARD_API.apply_replacers(config.description, config.replacers)
+    if not description then
+        return false, err3
+    end
+
+    -- Check and create tag if necessary
+    if not PRIVATE_SHIPYARD_API.tag_exists(tag) then
+        local success, tag_err = SHIPYARD_API.create_tag(tag, description)
+        if not success then
+            return false, tag_err
+        end
+    else
+        local success, push_err = SHIPYARD_API.ensure_tag_pushed(tag)
+        if not success then
+            return false, push_err
+        end
+    end
+
+    -- Create or update release
+    if PRIVATE_SHIPYARD_API.release_exists(tag) then
+        local success, rel_err = SHIPYARD_API.update_release(tag, release_name, description)
+        if not success then
+            return false, rel_err
+        end
+    else
+        local success, rel_err = SHIPYARD_API.create_release(tag, release_name, description)
+        if not success then
+            return false, rel_err
+        end
+    end
+
+    -- Upload assets
+    if config.assets then
+        local success, asset_err = SHIPYARD_API.upload_assets(tag, config.assets)
+        if not success then
+            return false, asset_err
+        end
+    end
+
+    return true, nil
+end
+
+SHIPYARD_API.generate_release_from_json = function(json_file_path)
+    local config, err = SHIPYARD_API.load_config(json_file_path)
+    if not config then
+        return false, err
+    end
+
+    return SHIPYARD_API.generate_release(config)
+end
+
+-- ============================================
+-- CLI Layer - User Interface Functions
+-- ============================================
+SHIPYARD_CLI = {}
+
+SHIPYARD_CLI.print_error = function(message)
+    print("❌ ERROR: " .. message)
+end
+
+SHIPYARD_CLI.print_success = function(message)
+    print("✅ " .. message)
+end
+
+SHIPYARD_CLI.print_info = function(message)
+    print("ℹ️  " .. message)
+end
+
+SHIPYARD_CLI.check_gh_cli = function()
     local handle = io.popen("gh --version 2>&1")
-    local output = handle:read("*a")
+    local _ = handle:read("*a")
     local success, _, code = handle:close()
 
     if not success or code ~= 0 then
-        print_error("GitHub CLI (gh) is not installed!")
-        print_error("Please install GitHub CLI: https://cli.github.com/")
+        SHIPYARD_CLI.print_error("GitHub CLI (gh) is not installed!")
+        SHIPYARD_CLI.print_error("Please install GitHub CLI: https://cli.github.com/")
         os.exit(1)
     end
 end
 
-local function check_gh_auth()
+SHIPYARD_CLI.check_gh_auth = function()
     local handle = io.popen("gh auth status > /dev/null 2>&1")
-    local output = handle:read("*a")
+    local _ = handle:read("*a")
     local success, _, code = handle:close()
 
     if not success or code ~= 0 then
-        print_error("GitHub CLI is not authenticated!")
-        print_error("Please run: gh auth login")
+        SHIPYARD_CLI.print_error("GitHub CLI is not authenticated!")
+        SHIPYARD_CLI.print_error("Please run: gh auth login")
         os.exit(1)
     end
 end
 
-local function check_git_repository()
-    local result = execute_command("git rev-parse --git-dir > /dev/null 2>&1")
-    
-    if not command_succeeded(result) then
-        print_error("This directory is not a Git repository!")
+SHIPYARD_CLI.check_git_repository = function()
+    local result = PRIVATE_SHIPYARD_API.execute_command("git rev-parse --git-dir > /dev/null 2>&1")
+
+    if not PRIVATE_SHIPYARD_API.command_succeeded(result) then
+        SHIPYARD_CLI.print_error("This directory is not a Git repository!")
         print("Please run:")
         print("  git init")
         print("  git add .")
@@ -80,11 +404,11 @@ local function check_git_repository()
     end
 end
 
-local function check_git_commits()
-    local result = execute_command("git rev-parse HEAD > /dev/null 2>&1")
-    
-    if not command_succeeded(result) then
-        print_error("The repository has no commits!")
+SHIPYARD_CLI.check_git_commits = function()
+    local result = PRIVATE_SHIPYARD_API.execute_command("git rev-parse HEAD > /dev/null 2>&1")
+
+    if not PRIVATE_SHIPYARD_API.command_succeeded(result) then
+        SHIPYARD_CLI.print_error("The repository has no commits!")
         print("Please make the first commit:")
         print("  git add .")
         print("  git commit -m 'Initial commit'")
@@ -92,11 +416,11 @@ local function check_git_commits()
     end
 end
 
-local function check_git_remote()
-    local result = execute_command("git remote get-url origin > /dev/null 2>&1")
-    
-    if not command_succeeded(result) then
-        print_error("The repository doesn't have 'origin' remote configured!")
+SHIPYARD_CLI.check_git_remote = function()
+    local result = PRIVATE_SHIPYARD_API.execute_command("git remote get-url origin > /dev/null 2>&1")
+
+    if not PRIVATE_SHIPYARD_API.command_succeeded(result) then
+        SHIPYARD_CLI.print_error("The repository doesn't have 'origin' remote configured!")
         print("Please configure the remote:")
         print("  git remote add origin https://github.com/username/repository.git")
         print("  git push -u origin main")
@@ -104,358 +428,7 @@ local function check_git_remote()
     end
 end
 
-
--- ============================================
--- Template System
--- ============================================
-
-local function apply_replacers(template, replacers)
-    if not template then
-        return nil
-    end
-    
-    local result = template
-    
-    for key, value in pairs(replacers) do
-        local pattern = "{" .. key .. "}"
-        result = string.gsub(result, pattern, tostring(value))
-    end
-    
-    -- Check if there are still unresolved variables
-    local unresolved = string.match(result, "{([^}]+)}")
-    if unresolved then
-        print_error("Undefined variable in template: {" .. unresolved .. "}")
-        return nil
-    end
-    
-    return result
-end
-
--- ============================================
--- Configuration Validation
--- ============================================
-
-local function validate_config(config)
-    if not config.replacers then
-        print_error("'replacers' field is required in configuration file")
-        return false
-    end
-    
-    if not config.release then
-        print_error("'release' field is required in configuration file")
-        return false
-    end
-    
-    if not config.tag then
-        print_error("'tag' field is required in configuration file")
-        return false
-    end
-    
-    if not config.description then
-        print_error("'description' field is required in configuration file")
-        return false
-    end
-    
-    return true
-end
-
--- ============================================
--- Replacer Management
--- ============================================
-
-local function keys_of_table(t)
-    local keys = {}
-    for k, _ in pairs(t) do
-        table.insert(keys, k)
-    end
-    return keys
-end
-
-local function load_and_validate_config(config_path, key)
-    -- Check if file exists
-    if not file_exists(config_path) then
-        print_error("Configuration file not found: " .. config_path)
-        return nil
-    end
-    
-    -- Read and parse JSON file
-    local config = json.load_from_file(config_path)
-    
-    if not config then
-        print_error("Failed to parse JSON file")
-        return nil
-    end
-    
-    -- Check if replacers field exists
-    if not config.replacers then
-        print_error("'replacers' field not found in configuration file")
-        return nil
-    end
-    
-    -- Check if key exists in replacers
-    if config.replacers[key] == nil then
-        print_error("Replacer key '" .. key .. "' not found in configuration file")
-        print_info("Available keys: " .. table.concat(keys_of_table(config.replacers), ", "))
-        return nil
-    end
-    
-    return config
-end
-
-local function save_config(config_path, config)
-    local parsed = json.dumps_to_string(config)
-    dtw.write_file(config_path, parsed)
-end
-
-local function modify_replacer(config_path, key, value)
-    local config = load_and_validate_config(config_path, key)
-    if not config then
-        return false
-    end
-    
-    local old_value = config.replacers[key]
-    config.replacers[key] = value
-    
-    save_config(config_path, config)
-    
-    print_success("Replacer updated successfully!")
-    print_info("Key: " .. key)
-    print_info("Old value: " .. tostring(old_value))
-    print_info("New value: " .. tostring(value))
-    
-    return true
-end
-
-local function modify_numeric_replacer(config_path, key, operation, operation_name)
-    local config = load_and_validate_config(config_path, key)
-    if not config then
-        return false
-    end
-    
-    local old_value = config.replacers[key]
-    
-    -- Check if the value is a valid number
-    local num_value = tonumber(old_value)
-    if not num_value then
-        print_error("Replacer value '" .. tostring(old_value) .. "' is not a valid number")
-        print_info("The " .. operation_name .. "_replacer command only works with numeric values")
-        return false
-    end
-    
-    -- Apply the operation
-    local new_value = operation(num_value)
-    config.replacers[key] = tostring(new_value)
-
-    save_config(config_path, config)
-    
-    print_success("Replacer " .. operation_name .. "ed successfully!")
-    print_info("Key: " .. key)
-    print_info("Old value: " .. tostring(old_value))
-    print_info("New value: " .. tostring(new_value))
-    
-    return true
-end
-
-local function increment_replacer(config_path, key)
-    return modify_numeric_replacer(config_path, key, function(n) return n + 1 end, "increment")
-end
-
-local function decrement_replacer(config_path, key)
-    return modify_numeric_replacer(config_path, key, function(n) return n - 1 end, "decrement")
-end
-
--- ============================================
--- Tag Management
--- ============================================
-
-local function ensure_tag_pushed(tag)
-
-    -- Check if tag exists on remote
-    local result = os.execute("git ls-remote --tags origin " .. tag .. " | grep -q " .. tag)
-
-    if result ~= 0 then
-        -- If it doesn't exist on remote, push it
-        local push_result = execute_command("git push origin " .. tag)
-        if push_result ~= 0 then
-            print_error("Failed to push existing tag to remote repository")
-            return false
-        end
-    end
-
-    return true
-end
-
-
-local function tag_exists(tag)
-    local result = execute_command("git tag -l " .. tag .. " | grep -q '^" .. tag .. "$'")
-    return result == 0
-end
-
-local function create_tag(tag, description)
-
-
-    local cmd = string.format("git tag -a %s -m '%s'", tag, description)
-    local result = execute_command(cmd)
-    
-    if result ~= 0 then
-        print_error("Failed to create tag")
-        return false
-    end
-    
-    -- Push tag to remote repository
-    result = execute_command("git push origin " .. tag)
-    
-    if result ~= 0 then
-        print_error("Failed to push tag to repository")
-        return false
-    end
-    
-    return true
-end
-
-
--- ============================================
--- Release Management
--- ============================================
-
-local function release_exists(tag)
-    local result = execute_command("gh release view " .. tag .. " > /dev/null 2>&1")
-    return result == 0
-end
-
-local function create_release(tag, release_name, description)
-    
-    -- Escape quotes in description
-    local escaped_desc = string.gsub(description, '"', '\\"')
-    
-    local cmd = string.format('gh release create "%s" --title "%s" --notes "%s"',
-        tag, release_name, escaped_desc)
-    
-    local result = execute_command(cmd)
-    
-    if result ~= 0 then
-        print_error("Failed to create release")
-        return false
-    end
-    
-    return true
-end
-
-local function update_release(tag, release_name, description)
-    
-    -- For older versions of gh CLI that don't support 'gh release edit',
-    -- we need to delete and recreate the release
-    print("Deleting existing release to update...")
-    local delete_result = execute_command(string.format('gh release delete "%s" -y', tag))
-    
-    if delete_result ~= 0 then
-        print_error("Failed to delete existing release")
-        return false
-    end
-    
-    -- Recreate the release with updated information
-    return create_release(tag, release_name, description)
-end
-
--- ============================================
--- Asset Management
--- ============================================
-
-local function upload_assets(tag, assets)
-    if not assets or #assets == 0 then
-        print_info("No assets to upload")
-        return true
-    end
-    
-    for i, asset_path in ipairs(assets) do
-        if not file_exists(asset_path) then
-            print_error("Asset not found: " .. asset_path)
-            return false
-        end
-        
-        -- The gh release upload command automatically replaces existing assets
-        local cmd = string.format('gh release upload "%s" "%s" --clobber', tag, asset_path)
-        local result = execute_command(cmd)
-        
-        if result ~= 0 then
-            print_error("Failed to upload asset: " .. asset_path)
-            return false
-        end
-        
-    end
-    
-    return true
-end
-
--- ============================================
--- Main Function
--- ============================================
-
-local function process_release(config_path)
-    -- Check if file exists
-    if not file_exists(config_path) then
-        print_error("Configuration file not found: " .. config_path)
-        return false
-    end
-    
-    -- Read and parse JSON file
-    local config = json.load_from_file(config_path)
-    
-    if not config then
-        print_error("Failed to parse JSON file")
-        return false
-    end
-    
-    -- Validate configuration
-    if not validate_config(config) then
-        return false
-    end
-    
-    -- Apply replacers to templates
-    local release_name = apply_replacers(config.release, config.replacers)
-    local tag = apply_replacers(config.tag, config.replacers)
-    local description = apply_replacers(config.description, config.replacers)
-    
-    if not release_name or not tag or not description then
-        return false
-    end
-    
-    -- Check and create tag if necessary
-    if not tag_exists(tag) then
-        if not create_tag(tag, description) then
-            return false
-        end
-    else
-        ensure_tag_pushed(tag)
-    end
-    
-    -- Create or update release
-    if release_exists(tag) then
-        if not update_release(tag, release_name, description) then
-            return false
-        end
-    else
-        if not create_release(tag, release_name, description) then
-            return false
-        end
-    end
-    
-    -- Upload assets
-    if config.assets then
-        if not upload_assets(tag, config.assets) then
-            return false
-        end
-    end
-    
-    print_success("Release published successfully! 🚀")
-    return true
-end
-
--- ============================================
--- CLI Interface
--- ============================================
-
-local function show_help()
+SHIPYARD_CLI.show_help = function()
     print([[
 🚢 Shipyard - GitHub Release Manager
 
@@ -526,18 +499,14 @@ EXAMPLES:
 ]])
 end
 
--- ============================================
--- Entry Point
--- ============================================
-
-local function get_config_file_or_default()
+SHIPYARD_CLI.get_config_file_or_default = function()
     local config_file = argv.get_flag_arg_by_index({"file"}, 1)
     return config_file or "release.json"
 end
 
-local function validate_required_arg(arg, arg_name, usage_message)
+SHIPYARD_CLI.validate_required_arg = function(arg, arg_name, usage_message)
     if not arg then
-        print_error("Missing required argument: --" .. arg_name)
+        SHIPYARD_CLI.print_error("Missing required argument: --" .. arg_name)
         print("")
         print("Use: " .. usage_message)
         print("Or: shipyard --help for more information")
@@ -545,79 +514,115 @@ local function validate_required_arg(arg, arg_name, usage_message)
     end
 end
 
-local function execute_and_exit(func, ...)
-    local success = func(...)
-    os.exit(success and 0 or 1)
-end
-
-local function handle_modify_replacer()
+SHIPYARD_CLI.handle_modify_replacer = function()
     local name = argv.get_flag_arg_by_index({"name"}, 1)
     local value = argv.get_flag_arg_by_index({"value"}, 1)
-    local config_file = get_config_file_or_default()
-    
-    validate_required_arg(name, "name", "shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
-    validate_required_arg(value, "value", "shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
-    
-    execute_and_exit(modify_replacer, config_file, name, value)
+    local config_file = SHIPYARD_CLI.get_config_file_or_default()
+
+    SHIPYARD_CLI.validate_required_arg(name, "name", "shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
+    SHIPYARD_CLI.validate_required_arg(value, "value", "shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
+
+    local success, err, data = SHIPYARD_API.modify_replacer(config_file, name, value)
+    if not success then
+        SHIPYARD_CLI.print_error(err)
+        os.exit(1)
+    end
+
+    SHIPYARD_CLI.print_success("Replacer updated successfully!")
+    SHIPYARD_CLI.print_info("Key: " .. data.key)
+    SHIPYARD_CLI.print_info("Old value: " .. tostring(data.old_value))
+    SHIPYARD_CLI.print_info("New value: " .. tostring(data.new_value))
+    os.exit(0)
 end
 
-local function handle_increment_replacer()
+SHIPYARD_CLI.handle_increment_replacer = function()
     local name = argv.get_flag_arg_by_index({"name"}, 1)
-    local config_file = get_config_file_or_default()
-    
-    validate_required_arg(name, "name", "shipyard increment_replacer --name <KEY> [--file <config-file>]")
-    
-    execute_and_exit(increment_replacer, config_file, name)
+    local config_file = SHIPYARD_CLI.get_config_file_or_default()
+
+    SHIPYARD_CLI.validate_required_arg(name, "name", "shipyard increment_replacer --name <KEY> [--file <config-file>]")
+
+    local success, err, data = SHIPYARD_API.increment_replacer(config_file, name)
+    if not success then
+        SHIPYARD_CLI.print_error(err)
+        os.exit(1)
+    end
+
+    SHIPYARD_CLI.print_success("Replacer incremented successfully!")
+    SHIPYARD_CLI.print_info("Key: " .. data.key)
+    SHIPYARD_CLI.print_info("Old value: " .. tostring(data.old_value))
+    SHIPYARD_CLI.print_info("New value: " .. tostring(data.new_value))
+    os.exit(0)
 end
 
-local function handle_decrement_replacer()
+SHIPYARD_CLI.handle_decrement_replacer = function()
     local name = argv.get_flag_arg_by_index({"name"}, 1)
-    local config_file = get_config_file_or_default()
-    
-    validate_required_arg(name, "name", "shipyard decrement_replacer --name <KEY> [--file <config-file>]")
-    
-    execute_and_exit(decrement_replacer, config_file, name)
+    local config_file = SHIPYARD_CLI.get_config_file_or_default()
+
+    SHIPYARD_CLI.validate_required_arg(name, "name", "shipyard decrement_replacer --name <KEY> [--file <config-file>]")
+
+    local success, err, data = SHIPYARD_API.decrement_replacer(config_file, name)
+    if not success then
+        SHIPYARD_CLI.print_error(err)
+        os.exit(1)
+    end
+
+    SHIPYARD_CLI.print_success("Replacer decremented successfully!")
+    SHIPYARD_CLI.print_info("Key: " .. data.key)
+    SHIPYARD_CLI.print_info("Old value: " .. tostring(data.old_value))
+    SHIPYARD_CLI.print_info("New value: " .. tostring(data.new_value))
+    os.exit(0)
 end
 
-local function main()
+SHIPYARD_CLI.handle_process_release = function(config_path)
+    local success, err = SHIPYARD_API.generate_release_from_json(config_path)
+    if not success then
+        SHIPYARD_CLI.print_error(err)
+        os.exit(1)
+    end
+
+    SHIPYARD_CLI.print_success("Release published successfully! 🚀")
+    os.exit(0)
+end
+
+function SHIPYARD_CLI.main()
     -- Check if help was requested
     if argv.flags_exist({ "h", "help" }) then
-        show_help()
+        SHIPYARD_CLI.show_help()
         os.exit(0)
     end
-    
+
     -- Get first argument (could be a command or config file)
     local first_arg = argv.get_next_unused()
-    
+
     -- Route to appropriate command handler
     local commands = {
-        modify_replacer = handle_modify_replacer,
-        increment_replacer = handle_increment_replacer,
-        decrement_replacer = handle_decrement_replacer
+        modify_replacer = SHIPYARD_CLI.handle_modify_replacer,
+        increment_replacer = SHIPYARD_CLI.handle_increment_replacer,
+        decrement_replacer = SHIPYARD_CLI.handle_decrement_replacer
     }
-    
+
     local command_handler = commands[first_arg]
     if command_handler then
         command_handler()
         return
     end
-    
+
     -- Otherwise, treat first_arg as configuration file
     if not first_arg then
-        print_error("No configuration file specified")
+        SHIPYARD_CLI.print_error("No configuration file specified")
         print("")
         print("Use: shipyard <configuration-file.json>")
         print("Or: shipyard --help for more information")
         os.exit(1)
     end
-    
-    check_gh_cli()
-    check_gh_auth()
-    check_git_repository()
-    check_git_commits()
-    check_git_remote()
 
-    execute_and_exit(process_release, first_arg)
+    SHIPYARD_CLI.check_gh_cli()
+    SHIPYARD_CLI.check_gh_auth()
+    SHIPYARD_CLI.check_git_repository()
+    SHIPYARD_CLI.check_git_commits()
+    SHIPYARD_CLI.check_git_remote()
+
+    SHIPYARD_CLI.handle_process_release(first_arg)
 end
 
-main()
+SHIPYARD_CLI.main()
