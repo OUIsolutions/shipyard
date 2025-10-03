@@ -177,6 +177,66 @@ local function validate_config(config)
 end
 
 -- ============================================
+-- Replacer Management
+-- ============================================
+
+local function modify_replacer(config_path, key, value)
+    -- Check if file exists
+    if not file_exists(config_path) then
+        print_error("Configuration file not found: " .. config_path)
+        return false
+    end
+    
+    -- Read and parse JSON file
+    local config = json.load_from_file(config_path)
+    
+    if not config then
+        print_error("Failed to parse JSON file")
+        return false
+    end
+    
+    -- Check if replacers field exists
+    if not config.replacers then
+        print_error("'replacers' field not found in configuration file")
+        return false
+    end
+    
+    -- Check if key exists in replacers
+    if config.replacers[key] == nil then
+        print_error("Replacer key '" .. key .. "' not found in configuration file")
+        print_info("Available keys: " .. table.concat(keys_of_table(config.replacers), ", "))
+        return false
+    end
+    
+    -- Store old value for display
+    local old_value = config.replacers[key]
+    
+    -- Modify the replacer value
+    config.replacers[key] = value
+    
+    -- Save the modified configuration back to file
+    if not json.save_to_file(config_path, config) then
+        print_error("Failed to save configuration file")
+        return false
+    end
+    
+    print_success("Replacer updated successfully!")
+    print_info("Key: " .. key)
+    print_info("Old value: " .. tostring(old_value))
+    print_info("New value: " .. tostring(value))
+    
+    return true
+end
+
+local function keys_of_table(t)
+    local keys = {}
+    for k, _ in pairs(t) do
+        table.insert(keys, k)
+    end
+    return keys
+end
+
+-- ============================================
 -- Tag Management
 -- ============================================
 
@@ -373,12 +433,19 @@ local function show_help()
 
 USAGE:
     shipyard <configuration-file.json>
+    shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]
     shipyard --help
 
-ARGUMENTS:
-    <configuration-file.json>    Path to JSON configuration file
+COMMANDS:
+    <configuration-file.json>    Create/update a GitHub release
+    modify_replacer              Modify a replacer value in configuration file
 
-OPTIONS:
+MODIFY_REPLACER OPTIONS:
+    --name <KEY>                 The replacer key to modify (required)
+    --value <VALUE>              The new value for the replacer (required)
+    --file <config-file>         Path to configuration file (default: release.json)
+
+GENERAL OPTIONS:
     --help, -h                   Show this help message
 
 CONFIGURATION EXAMPLE (release.json):
@@ -408,8 +475,10 @@ PREREQUISITES:
     - Git repository initialized
     - Write access to repository
 
-EXAMPLE:
+EXAMPLES:
     shipyard release.json
+    shipyard modify_replacer --name BIG_VERSION --value 1
+    shipyard modify_replacer --name PATCH_VERSION --value 5 --file devops/release.json
 ]])
 end
 
@@ -425,8 +494,49 @@ local function main()
         os.exit(0)
     end
     
-    -- Get configuration file
-    local config_file = argv.get_next_unused()
+    -- Get first argument (could be a command or config file)
+    local first_arg = argv.get_next_unused()
+    
+    -- Check if it's the modify_replacer command
+    if first_arg == "modify_replacer" then
+        local name = argv.get_flag("name")
+        local value = argv.get_flag("value")
+        local config_file = argv.get_flag("file")
+        
+        -- Default config file
+        if not config_file then
+            config_file = "release.json"
+        end
+        
+        -- Validate required arguments
+        if not name then
+            print_error("Missing required argument: --name")
+            print("")
+            print("Use: shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
+            print("Or: shipyard --help for more information")
+            os.exit(1)
+        end
+        
+        if not value then
+            print_error("Missing required argument: --value")
+            print("")
+            print("Use: shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
+            print("Or: shipyard --help for more information")
+            os.exit(1)
+        end
+        
+        -- Execute modify_replacer
+        local success = modify_replacer(config_file, name, value)
+        
+        if not success then
+            os.exit(1)
+        end
+        
+        os.exit(0)
+    end
+    
+    -- Otherwise, treat first_arg as configuration file
+    local config_file = first_arg
     if not config_file then
         print_error("No configuration file specified")
         print("")

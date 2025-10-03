@@ -20,7 +20,8 @@ Shipyard is a powerful GitHub release management tool built for the VibeScript e
 
 - **🔄 Automated Release Creation**: Streamline your GitHub release workflow
 - **📝 Template-Based Versioning**: Use customizable replacers for version management
-- **📦 Asset Management**: Automatically upload and manage release assets
+- **� Dynamic Replacer Modification**: Update version numbers without manual JSON editing
+- **�📦 Asset Management**: Automatically upload and manage release assets
 - **🏷️ Smart Tag Handling**: Create new tags or update existing ones
 - **⚙️ JSON Configuration**: Simple, declarative configuration format
 - **🔧 VibeScript Integration**: Built specifically for the VibeScript ecosystem
@@ -98,6 +99,23 @@ Run the following command in your project directory:
 shipyard release.json
 ```
 
+### Modifying Replacers
+
+Update version numbers or other replacer values without manually editing the JSON file:
+
+```bash
+# Modify a replacer in the default release.json
+shipyard modify_replacer --name BIG_VERSION --value 1
+
+# Modify a replacer in a specific config file
+shipyard modify_replacer --name PATCH_VERSION --value 5 --file devops/release.json
+```
+
+**Options:**
+- `--name <KEY>`: The replacer key to modify (required)
+- `--value <VALUE>`: The new value for the replacer (required)
+- `--file <config-file>`: Path to configuration file (optional, defaults to `release.json`)
+
 ### Showing Help
 
 You can display usage instructions with:
@@ -162,6 +180,28 @@ shipyard -h
        "CHANGELOG.md"
    ]
 }
+```
+
+### Workflow Example: Releasing a Patch
+
+```bash
+# 1. Modify the patch version
+shipyard modify_replacer --name PATCH_VERSION --value 1
+
+# 2. Create and publish the release
+shipyard release.json
+```
+
+### Workflow Example: Bumping Major Version
+
+```bash
+# Update major version and reset minor/patch
+shipyard modify_replacer --name BIG_VERSION --value 2
+shipyard modify_replacer --name SMALL_VERSION --value 0
+shipyard modify_replacer --name PATCH_VERSION --value 0
+
+# Create the release
+shipyard release.json
 ```
 
 ## 📚 Documentation
