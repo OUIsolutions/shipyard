@@ -236,6 +236,63 @@ local function keys_of_table(t)
     return keys
 end
 
+local function increment_replacer(config_path, key)
+    -- Check if file exists
+    if not file_exists(config_path) then
+        print_error("Configuration file not found: " .. config_path)
+        return false
+    end
+    
+    -- Read and parse JSON file
+    local config = json.load_from_file(config_path)
+    
+    if not config then
+        print_error("Failed to parse JSON file")
+        return false
+    end
+    
+    -- Check if replacers field exists
+    if not config.replacers then
+        print_error("'replacers' field not found in configuration file")
+        return false
+    end
+    
+    -- Check if key exists in replacers
+    if config.replacers[key] == nil then
+        print_error("Replacer key '" .. key .. "' not found in configuration file")
+        print_info("Available keys: " .. table.concat(keys_of_table(config.replacers), ", "))
+        return false
+    end
+    
+    -- Store old value
+    local old_value = config.replacers[key]
+    
+    -- Check if the value is a valid number
+    local num_value = tonumber(old_value)
+    if not num_value then
+        print_error("Replacer value '" .. tostring(old_value) .. "' is not a valid number")
+        print_info("The increment_replacer command only works with numeric values")
+        return false
+    end
+    
+    -- Increment the value
+    local new_value = num_value + 1
+    config.replacers[key] = tostring(new_value)
+    
+    -- Save the modified configuration back to file
+    if not json.save_to_file(config_path, config) then
+        print_error("Failed to save configuration file")
+        return false
+    end
+    
+    print_success("Replacer incremented successfully!")
+    print_info("Key: " .. key)
+    print_info("Old value: " .. tostring(old_value))
+    print_info("New value: " .. tostring(new_value))
+    
+    return true
+end
+
 -- ============================================
 -- Tag Management
 -- ============================================
@@ -434,15 +491,21 @@ local function show_help()
 USAGE:
     shipyard <configuration-file.json>
     shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]
+    shipyard increment_replacer --name <KEY> [--file <config-file>]
     shipyard --help
 
 COMMANDS:
     <configuration-file.json>    Create/update a GitHub release
     modify_replacer              Modify a replacer value in configuration file
+    increment_replacer           Increment a numeric replacer value by 1
 
 MODIFY_REPLACER OPTIONS:
     --name <KEY>                 The replacer key to modify (required)
     --value <VALUE>              The new value for the replacer (required)
+    --file <config-file>         Path to configuration file (default: release.json)
+
+INCREMENT_REPLACER OPTIONS:
+    --name <KEY>                 The replacer key to increment (required)
     --file <config-file>         Path to configuration file (default: release.json)
 
 GENERAL OPTIONS:
@@ -479,6 +542,8 @@ EXAMPLES:
     shipyard release.json
     shipyard modify_replacer --name BIG_VERSION --value 1
     shipyard modify_replacer --name PATCH_VERSION --value 5 --file devops/release.json
+    shipyard increment_replacer --name PATCH_VERSION
+    shipyard increment_replacer --name BIG_VERSION --file devops/release.json
 ]])
 end
 
@@ -527,6 +592,35 @@ local function main()
         
         -- Execute modify_replacer
         local success = modify_replacer(config_file, name, value)
+        
+        if not success then
+            os.exit(1)
+        end
+        
+        os.exit(0)
+    end
+    
+    -- Check if it's the increment_replacer command
+    if first_arg == "increment_replacer" then
+        local name = argv.get_flag("name")
+        local config_file = argv.get_flag("file")
+        
+        -- Default config file
+        if not config_file then
+            config_file = "release.json"
+        end
+        
+        -- Validate required arguments
+        if not name then
+            print_error("Missing required argument: --name")
+            print("")
+            print("Use: shipyard increment_replacer --name <KEY> [--file <config-file>]")
+            print("Or: shipyard --help for more information")
+            os.exit(1)
+        end
+        
+        -- Execute increment_replacer
+        local success = increment_replacer(config_file, name)
         
         if not success then
             os.exit(1)
