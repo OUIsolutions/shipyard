@@ -73,7 +73,9 @@ vibescript add_script --file shipyard.lua shipyard
 
 ## 📖 Usage
 
-### Configuration
+### CLI Mode
+
+#### Configuration
 
 Create a `release.json` file in your project root with the following structure:
 
@@ -91,7 +93,7 @@ Create a `release.json` file in your project root with the following structure:
 }
 ```
 
-### Creating a Release
+#### Creating a Release
 
 Run the following command in your project directory:
 
@@ -99,7 +101,7 @@ Run the following command in your project directory:
 shipyard release.json
 ```
 
-### Modifying Replacers
+#### Modifying Replacers
 
 Update version numbers or other replacer values without manually editing the JSON file:
 
@@ -116,7 +118,7 @@ shipyard modify_replacer --name PATCH_VERSION --value 5 --file devops/release.js
 - `--value <VALUE>`: The new value for the replacer (required)
 - `--file <config-file>`: Path to configuration file (optional, defaults to `release.json`)
 
-### Showing Help
+#### Showing Help
 
 You can display usage instructions with:
 
@@ -128,6 +130,104 @@ Or the shorthand:
 
 ```bash
 shipyard -h
+```
+
+### API Mode
+
+You can use Shipyard programmatically in your VibeScript projects.
+
+#### Setup
+
+First, install Shipyard as a global module:
+
+```bash
+vibescript add_script --file shipyard.lua shipyard
+```
+
+#### Loading the Module
+
+In your VibeScript code, load Shipyard as a global module:
+
+```lua
+local shipyard = load_global_module("shipyard")
+```
+
+#### API Functions
+
+All API functions return a tuple: `(success, error_message, [data])`
+
+##### `shipyard.create_release(config_path)`
+
+Creates a GitHub release based on a configuration file.
+
+```lua
+local success, err = shipyard.create_release("release.json")
+if not success then
+    print("Error: " .. err)
+    return
+end
+print("Release created successfully!")
+```
+
+##### `shipyard.modify_replacer(config_path, key, value)`
+
+Modifies a replacer value in the configuration file.
+
+```lua
+local success, err = shipyard.modify_replacer("release.json", "PATCH_VERSION", "5")
+if not success then
+    print("Error: " .. err)
+    return
+end
+print("Replacer updated successfully!")
+```
+
+##### `shipyard.increment_replacer(config_path, key)`
+
+Increments a numeric replacer value.
+
+```lua
+local success, err = shipyard.increment_replacer("release.json", "PATCH_VERSION")
+if not success then
+    print("Error: " .. err)
+    return
+end
+print("Replacer incremented successfully!")
+```
+
+##### `shipyard.decrement_replacer(config_path, key)`
+
+Decrements a numeric replacer value.
+
+```lua
+local success, err = shipyard.decrement_replacer("release.json", "BUILD_NUMBER")
+if not success then
+    print("Error: " .. err)
+    return
+end
+print("Replacer decremented successfully!")
+```
+
+#### Example: Automated Release Script
+
+```lua
+local shipyard = load_global_module("shipyard")
+
+-- Increment patch version
+local success, err = shipyard.increment_replacer("release.json", "PATCH_VERSION")
+if not success then
+    print("❌ Failed to increment version: " .. err)
+    os.exit(1)
+end
+
+-- Create the release
+success, err = shipyard.create_release("release.json")
+if not success then
+    print("❌ Failed to create release: " .. err)
+    os.exit(1)
+end
+
+print("✅ Release created successfully!")
 ```
 
 ### Configuration Options
