@@ -278,13 +278,10 @@ local function increment_replacer(config_path, key)
     -- Increment the value
     local new_value = num_value + 1
     config.replacers[key] = tostring(new_value)
-    
+
+    local parsed = json.dumps_to_string(config)
     -- Save the modified configuration back to file
-    if not json.save_to_file(config_path, config) then
-        print_error("Failed to save configuration file")
-        return false
-    end
-    
+    dtw.write_file(config_path, parsed)
     print_success("Replacer incremented successfully!")
     print_info("Key: " .. key)
     print_info("Old value: " .. tostring(old_value))
@@ -564,10 +561,10 @@ local function main()
     
     -- Check if it's the modify_replacer command
     if first_arg == "modify_replacer" then
-        local name = argv.get_flag("name")
-        local value = argv.get_flag("value")
-        local config_file = argv.get_flag("file")
-        
+        local name = argv.get_flag_arg_by_index({"name"},1)
+        local value = argv.get_flag_arg_by_index({"value"},1)
+        local config_file = argv.get_flag_arg_by_index({"file"},1)
+
         -- Default config file
         if not config_file then
             config_file = "release.json"
@@ -602,9 +599,9 @@ local function main()
     
     -- Check if it's the increment_replacer command
     if first_arg == "increment_replacer" then
-        local name = argv.get_flag("name")
-        local config_file = argv.get_flag("file")
-        
+        local name = argv.get_flag_arg_by_index({"name"},1)
+        local config_file = argv.get_flag_arg_by_index({"file"},1)
+
         -- Default config file
         if not config_file then
             config_file = "release.json"
