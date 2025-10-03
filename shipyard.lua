@@ -31,12 +31,19 @@ local function execute_command(cmd)
     return code or 0
 end
 
+local function command_succeeded(result)
+    if type(result) == "number" then
+        return result == 0
+    else
+        return result
+    end
+end
+
 -- ============================================
 -- Prerequisites Check
 -- ============================================
 
 local function check_gh_cli()
-
     local handle = io.popen("gh --version 2>&1")
     local output = handle:read("*a")
     local success, _, code = handle:close()
@@ -46,9 +53,7 @@ local function check_gh_cli()
         print_error("Please install GitHub CLI: https://cli.github.com/")
         os.exit(1)
     end
-
 end
-
 
 local function check_gh_auth()
     local handle = io.popen("gh auth status > /dev/null 2>&1")
@@ -62,18 +67,10 @@ local function check_gh_auth()
     end
 end
 
-
 local function check_git_repository()
     local result = execute_command("git rev-parse --git-dir > /dev/null 2>&1")
     
-    local success = false
-    if type(result) == "number" then
-        success = (result == 0)
-    else
-        success = result
-    end
-    
-    if not success then
+    if not command_succeeded(result) then
         print_error("This directory is not a Git repository!")
         print("Please run:")
         print("  git init")
@@ -86,14 +83,7 @@ end
 local function check_git_commits()
     local result = execute_command("git rev-parse HEAD > /dev/null 2>&1")
     
-    local success = false
-    if type(result) == "number" then
-        success = (result == 0)
-    else
-        success = result
-    end
-    
-    if not success then
+    if not command_succeeded(result) then
         print_error("The repository has no commits!")
         print("Please make the first commit:")
         print("  git add .")
@@ -105,14 +95,7 @@ end
 local function check_git_remote()
     local result = execute_command("git remote get-url origin > /dev/null 2>&1")
     
-    local success = false
-    if type(result) == "number" then
-        success = (result == 0)
-    else
-        success = result
-    end
-    
-    if not success then
+    if not command_succeeded(result) then
         print_error("The repository doesn't have 'origin' remote configured!")
         print("Please configure the remote:")
         print("  git remote add origin https://github.com/username/repository.git")
@@ -180,11 +163,19 @@ end
 -- Replacer Management
 -- ============================================
 
-local function modify_replacer(config_path, key, value)
+local function keys_of_table(t)
+    local keys = {}
+    for k, _ in pairs(t) do
+        table.insert(keys, k)
+    end
+    return keys
+end
+
+local function load_and_validate_config(config_path, key)
     -- Check if file exists
     if not file_exists(config_path) then
         print_error("Configuration file not found: " .. config_path)
-        return false
+        return nil
     end
     
     -- Read and parse JSON file
@@ -192,32 +183,40 @@ local function modify_replacer(config_path, key, value)
     
     if not config then
         print_error("Failed to parse JSON file")
-        return false
+        return nil
     end
     
     -- Check if replacers field exists
     if not config.replacers then
         print_error("'replacers' field not found in configuration file")
-        return false
+        return nil
     end
     
     -- Check if key exists in replacers
     if config.replacers[key] == nil then
         print_error("Replacer key '" .. key .. "' not found in configuration file")
         print_info("Available keys: " .. table.concat(keys_of_table(config.replacers), ", "))
+        return nil
+    end
+    
+    return config
+end
+
+local function save_config(config_path, config)
+    local parsed = json.dumps_to_string(config)
+    dtw.write_file(config_path, parsed)
+end
+
+local function modify_replacer(config_path, key, value)
+    local config = load_and_validate_config(config_path, key)
+    if not config then
         return false
     end
     
-    -- Store old value for display
     local old_value = config.replacers[key]
-    
-    -- Modify the replacer value
     config.replacers[key] = value
     
-    
-    local parsed = json.dumps_to_string(config)
-    -- Save the modified configuration back to file
-    dtw.write_file(config_path, parsed)
+    save_config(config_path, config)
     
     print_success("Replacer updated successfully!")
     print_info("Key: " .. key)
@@ -227,120 +226,42 @@ local function modify_replacer(config_path, key, value)
     return true
 end
 
-local function keys_of_table(t)
-    local keys = {}
-    for k, _ in pairs(t) do
-        table.insert(keys, k)
+local function modify_numeric_replacer(config_path, key, operation, operation_name)
+    local config = load_and_validate_config(config_path, key)
+    if not config then
+        return false
     end
-    return keys
+    
+    local old_value = config.replacers[key]
+    
+    -- Check if the value is a valid number
+    local num_value = tonumber(old_value)
+    if not num_value then
+        print_error("Replacer value '" .. tostring(old_value) .. "' is not a valid number")
+        print_info("The " .. operation_name .. "_replacer command only works with numeric values")
+        return false
+    end
+    
+    -- Apply the operation
+    local new_value = operation(num_value)
+    config.replacers[key] = tostring(new_value)
+
+    save_config(config_path, config)
+    
+    print_success("Replacer " .. operation_name .. "ed successfully!")
+    print_info("Key: " .. key)
+    print_info("Old value: " .. tostring(old_value))
+    print_info("New value: " .. tostring(new_value))
+    
+    return true
 end
 
 local function increment_replacer(config_path, key)
-    -- Check if file exists
-    if not file_exists(config_path) then
-        print_error("Configuration file not found: " .. config_path)
-        return false
-    end
-    
-    -- Read and parse JSON file
-    local config = json.load_from_file(config_path)
-    
-    if not config then
-        print_error("Failed to parse JSON file")
-        return false
-    end
-    
-    -- Check if replacers field exists
-    if not config.replacers then
-        print_error("'replacers' field not found in configuration file")
-        return false
-    end
-    
-    -- Check if key exists in replacers
-    if config.replacers[key] == nil then
-        print_error("Replacer key '" .. key .. "' not found in configuration file")
-        print_info("Available keys: " .. table.concat(keys_of_table(config.replacers), ", "))
-        return false
-    end
-    
-    -- Store old value
-    local old_value = config.replacers[key]
-    
-    -- Check if the value is a valid number
-    local num_value = tonumber(old_value)
-    if not num_value then
-        print_error("Replacer value '" .. tostring(old_value) .. "' is not a valid number")
-        print_info("The increment_replacer command only works with numeric values")
-        return false
-    end
-    
-    -- Increment the value
-    local new_value = num_value + 1
-    config.replacers[key] = tostring(new_value)
-
-    local parsed = json.dumps_to_string(config)
-    -- Save the modified configuration back to file
-    dtw.write_file(config_path, parsed)
-    print_success("Replacer incremented successfully!")
-    print_info("Key: " .. key)
-    print_info("Old value: " .. tostring(old_value))
-    print_info("New value: " .. tostring(new_value))
-    
-    return true
+    return modify_numeric_replacer(config_path, key, function(n) return n + 1 end, "increment")
 end
 
 local function decrement_replacer(config_path, key)
-    -- Check if file exists
-    if not file_exists(config_path) then
-        print_error("Configuration file not found: " .. config_path)
-        return false
-    end
-    
-    -- Read and parse JSON file
-    local config = json.load_from_file(config_path)
-    
-    if not config then
-        print_error("Failed to parse JSON file")
-        return false
-    end
-    
-    -- Check if replacers field exists
-    if not config.replacers then
-        print_error("'replacers' field not found in configuration file")
-        return false
-    end
-    
-    -- Check if key exists in replacers
-    if config.replacers[key] == nil then
-        print_error("Replacer key '" .. key .. "' not found in configuration file")
-        print_info("Available keys: " .. table.concat(keys_of_table(config.replacers), ", "))
-        return false
-    end
-    
-    -- Store old value
-    local old_value = config.replacers[key]
-    
-    -- Check if the value is a valid number
-    local num_value = tonumber(old_value)
-    if not num_value then
-        print_error("Replacer value '" .. tostring(old_value) .. "' is not a valid number")
-        print_info("The decrement_replacer command only works with numeric values")
-        return false
-    end
-    
-    -- Decrement the value
-    local new_value = num_value - 1
-    config.replacers[key] = tostring(new_value)
-
-    local parsed = json.dumps_to_string(config)
-    -- Save the modified configuration back to file
-    dtw.write_file(config_path, parsed)
-    print_success("Replacer decremented successfully!")
-    print_info("Key: " .. key)
-    print_info("Old value: " .. tostring(old_value))
-    print_info("New value: " .. tostring(new_value))
-    
-    return true
+    return modify_numeric_replacer(config_path, key, function(n) return n - 1 end, "decrement")
 end
 
 -- ============================================
@@ -609,10 +530,58 @@ end
 -- Entry Point
 -- ============================================
 
+local function get_config_file_or_default()
+    local config_file = argv.get_flag_arg_by_index({"file"}, 1)
+    return config_file or "release.json"
+end
+
+local function validate_required_arg(arg, arg_name, usage_message)
+    if not arg then
+        print_error("Missing required argument: --" .. arg_name)
+        print("")
+        print("Use: " .. usage_message)
+        print("Or: shipyard --help for more information")
+        os.exit(1)
+    end
+end
+
+local function execute_and_exit(func, ...)
+    local success = func(...)
+    os.exit(success and 0 or 1)
+end
+
+local function handle_modify_replacer()
+    local name = argv.get_flag_arg_by_index({"name"}, 1)
+    local value = argv.get_flag_arg_by_index({"value"}, 1)
+    local config_file = get_config_file_or_default()
+    
+    validate_required_arg(name, "name", "shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
+    validate_required_arg(value, "value", "shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
+    
+    execute_and_exit(modify_replacer, config_file, name, value)
+end
+
+local function handle_increment_replacer()
+    local name = argv.get_flag_arg_by_index({"name"}, 1)
+    local config_file = get_config_file_or_default()
+    
+    validate_required_arg(name, "name", "shipyard increment_replacer --name <KEY> [--file <config-file>]")
+    
+    execute_and_exit(increment_replacer, config_file, name)
+end
+
+local function handle_decrement_replacer()
+    local name = argv.get_flag_arg_by_index({"name"}, 1)
+    local config_file = get_config_file_or_default()
+    
+    validate_required_arg(name, "name", "shipyard decrement_replacer --name <KEY> [--file <config-file>]")
+    
+    execute_and_exit(decrement_replacer, config_file, name)
+end
+
 local function main()
     -- Check if help was requested
-    local help_arg = argv.flags_exist({ "h", "help" })
-    if help_arg then
+    if argv.flags_exist({ "h", "help" }) then
         show_help()
         os.exit(0)
     end
@@ -620,127 +589,35 @@ local function main()
     -- Get first argument (could be a command or config file)
     local first_arg = argv.get_next_unused()
     
-    -- Check if it's the modify_replacer command
-    if first_arg == "modify_replacer" then
-        local name = argv.get_flag_arg_by_index({"name"},1)
-        local value = argv.get_flag_arg_by_index({"value"},1)
-        local config_file = argv.get_flag_arg_by_index({"file"},1)
-
-        -- Default config file
-        if not config_file then
-            config_file = "release.json"
-        end
-        
-        -- Validate required arguments
-        if not name then
-            print_error("Missing required argument: --name")
-            print("")
-            print("Use: shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
-            print("Or: shipyard --help for more information")
-            os.exit(1)
-        end
-        
-        if not value then
-            print_error("Missing required argument: --value")
-            print("")
-            print("Use: shipyard modify_replacer --name <KEY> --value <VALUE> [--file <config-file>]")
-            print("Or: shipyard --help for more information")
-            os.exit(1)
-        end
-        
-        -- Execute modify_replacer
-        local success = modify_replacer(config_file, name, value)
-        
-        if not success then
-            os.exit(1)
-        end
-        
-        os.exit(0)
-    end
+    -- Route to appropriate command handler
+    local commands = {
+        modify_replacer = handle_modify_replacer,
+        increment_replacer = handle_increment_replacer,
+        decrement_replacer = handle_decrement_replacer
+    }
     
-    -- Check if it's the increment_replacer command
-    if first_arg == "increment_replacer" then
-        local name = argv.get_flag_arg_by_index({"name"},1)
-        local config_file = argv.get_flag_arg_by_index({"file"},1)
-
-        -- Default config file
-        if not config_file then
-            config_file = "release.json"
-        end
-        
-        -- Validate required arguments
-        if not name then
-            print_error("Missing required argument: --name")
-            print("")
-            print("Use: shipyard increment_replacer --name <KEY> [--file <config-file>]")
-            print("Or: shipyard --help for more information")
-            os.exit(1)
-        end
-        
-        -- Execute increment_replacer
-        local success = increment_replacer(config_file, name)
-        
-        if not success then
-            os.exit(1)
-        end
-        
-        os.exit(0)
-    end
-    
-    -- Check if it's the decrement_replacer command
-    if first_arg == "decrement_replacer" then
-        local name = argv.get_flag_arg_by_index({"name"},1)
-        local config_file = argv.get_flag_arg_by_index({"file"},1)
-
-        -- Default config file
-        if not config_file then
-            config_file = "release.json"
-        end
-        
-        -- Validate required arguments
-        if not name then
-            print_error("Missing required argument: --name")
-            print("")
-            print("Use: shipyard decrement_replacer --name <KEY> [--file <config-file>]")
-            print("Or: shipyard --help for more information")
-            os.exit(1)
-        end
-        
-        -- Execute decrement_replacer
-        local success = decrement_replacer(config_file, name)
-        
-        if not success then
-            os.exit(1)
-        end
-        
-        os.exit(0)
+    local command_handler = commands[first_arg]
+    if command_handler then
+        command_handler()
+        return
     end
     
     -- Otherwise, treat first_arg as configuration file
-    local config_file = first_arg
-    if not config_file then
+    if not first_arg then
         print_error("No configuration file specified")
         print("")
         print("Use: shipyard <configuration-file.json>")
         print("Or: shipyard --help for more information")
         os.exit(1)
     end
-
     
     check_gh_cli()
     check_gh_auth()
-
     check_git_repository()
     check_git_commits()
     check_git_remote()
 
-    local success = process_release(config_file)
-    
-    if not success then
-        os.exit(1)
-    end
-
-    os.exit(0)
+    execute_and_exit(process_release, first_arg)
 end
 
 main()
