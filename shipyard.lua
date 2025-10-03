@@ -255,19 +255,18 @@ end
 
 local function update_release(tag, release_name, description)
     
-    local escaped_desc = string.gsub(description, '"', '\\"')
+    -- For older versions of gh CLI that don't support 'gh release edit',
+    -- we need to delete and recreate the release
+    print("Deleting existing release to update...")
+    local delete_result = execute_command(string.format('gh release delete "%s" -y', tag))
     
-    local cmd = string.format('gh release edit "%s" --title "%s" --notes "%s"',
-        tag, release_name, escaped_desc)
-    
-    local result = execute_command(cmd)
-    
-    if result ~= 0 then
-        print_error("Failed to update release")
+    if delete_result ~= 0 then
+        print_error("Failed to delete existing release")
         return false
     end
     
-    return true
+    -- Recreate the release with updated information
+    return create_release(tag, release_name, description)
 end
 
 -- ============================================
