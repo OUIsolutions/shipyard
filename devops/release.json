@@ -1,13 +1,11 @@
 {
-   "replacers": {
-       "BIG_VERSION": "0",
-       "SMALL_VERSION": "1",
-       "PATCH_VERSION": "0"
-   },
-   "release": "{BIG_VERSION}.{SMALL_VERSION}.{PATCH_VERSION}",
-   "tag": "{BIG_VERSION}.{SMALL_VERSION}.{PATCH_VERSION}",
-   "description": "first version of shipyard",
-   "assets": [
-        "shipyard.lua"
-    ]
+	"assets":	["shipyard.lua"],
+	"description":	"first version of shipyard",
+	"release":	"{BIG_VERSION}.{SMALL_VERSION}.{PATCH_VERSION}",
+	"replacers":	{
+		"BIG_VERSION":	"0",
+		"PATCH_VERSION":	"0",
+		"SMALL_VERSION":	"2"
+	},
+	"tag":	"{BIG_VERSION}.{SMALL_VERSION}.{PATCH_VERSION}"
 }
