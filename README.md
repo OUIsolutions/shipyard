@@ -154,14 +154,14 @@ local shipyard = load_global_module("shipyard")
 
 #### API Functions
 
-All API functions return a tuple: `(success, error_message, [data])`
+All API functions raise errors on failure. Use `pcall` to handle errors gracefully.
 
-##### `shipyard.create_release(config_path)`
+##### `shipyard.generate_release_from_json(config_path)`
 
 Creates a GitHub release based on a configuration file.
 
 ```lua
-local success, err = shipyard.create_release("release.json")
+local success, err = pcall(shipyard.generate_release_from_json, "release.json")
 if not success then
     print("Error: " .. err)
     return
@@ -171,41 +171,44 @@ print("Release created successfully!")
 
 ##### `shipyard.modify_replacer(config_path, key, value)`
 
-Modifies a replacer value in the configuration file.
+Modifies a replacer value in the configuration file and returns a data table with `{key, old_value, new_value}`.
 
 ```lua
-local success, err = shipyard.modify_replacer("release.json", "PATCH_VERSION", "5")
+local success, data = pcall(shipyard.modify_replacer, "release.json", "PATCH_VERSION", "5")
 if not success then
-    print("Error: " .. err)
+    print("Error: " .. data)
     return
 end
 print("Replacer updated successfully!")
+print("Old value: " .. data.old_value .. ", New value: " .. data.new_value)
 ```
 
 ##### `shipyard.increment_replacer(config_path, key)`
 
-Increments a numeric replacer value.
+Increments a numeric replacer value and returns a data table with `{key, old_value, new_value}`.
 
 ```lua
-local success, err = shipyard.increment_replacer("release.json", "PATCH_VERSION")
+local success, data = pcall(shipyard.increment_replacer, "release.json", "PATCH_VERSION")
 if not success then
-    print("Error: " .. err)
+    print("Error: " .. data)
     return
 end
 print("Replacer incremented successfully!")
+print("Old value: " .. data.old_value .. ", New value: " .. data.new_value)
 ```
 
 ##### `shipyard.decrement_replacer(config_path, key)`
 
-Decrements a numeric replacer value.
+Decrements a numeric replacer value and returns a data table with `{key, old_value, new_value}`.
 
 ```lua
-local success, err = shipyard.decrement_replacer("release.json", "BUILD_NUMBER")
+local success, data = pcall(shipyard.decrement_replacer, "release.json", "BUILD_NUMBER")
 if not success then
-    print("Error: " .. err)
+    print("Error: " .. data)
     return
 end
 print("Replacer decremented successfully!")
+print("Old value: " .. data.old_value .. ", New value: " .. data.new_value)
 ```
 
 #### Example: Automated Release Script
@@ -214,16 +217,16 @@ print("Replacer decremented successfully!")
 local shipyard = load_global_module("shipyard")
 
 -- Increment patch version
-local success, err = shipyard.increment_replacer("release.json", "PATCH_VERSION")
+local success, result = pcall(shipyard.increment_replacer, "release.json", "PATCH_VERSION")
 if not success then
-    print("❌ Failed to increment version: " .. err)
+    print("❌ Failed to increment version: " .. result)
     os.exit(1)
 end
 
 -- Create the release
-success, err = shipyard.create_release("release.json")
+success, result = pcall(shipyard.generate_release_from_json, "release.json")
 if not success then
-    print("❌ Failed to create release: " .. err)
+    print("❌ Failed to create release: " .. result)
     os.exit(1)
 end
 
