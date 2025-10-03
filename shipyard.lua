@@ -214,11 +214,10 @@ local function modify_replacer(config_path, key, value)
     -- Modify the replacer value
     config.replacers[key] = value
     
+    
+    local parsed = json.dumps_to_string(config)
     -- Save the modified configuration back to file
-    if not json.save_to_file(config_path, config) then
-        print_error("Failed to save configuration file")
-        return false
-    end
+    dtw.write_file(config_path, parsed)
     
     print_success("Replacer updated successfully!")
     print_info("Key: " .. key)
