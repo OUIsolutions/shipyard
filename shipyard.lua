@@ -624,5 +624,6 @@ function SHIPYARD_CLI.main()
 
     SHIPYARD_CLI.handle_process_release(first_arg)
 end
-
+if is_main_script then 
 SHIPYARD_CLI.main()
+end 
