@@ -48,7 +48,7 @@ curl -L https://github.com/OUIsolutions/VibeScript/releases/download/0.36.0/amal
 
 ### Step 2: Install Shipyard
 ```bash
-vibescript add_script --file https://github.com/OUIsolutions/shipyard/releases/download/0.1.0/shipyard.lua shipyard
+vibescript add_script --file https://github.com/OUIsolutions/shipyard/releases/download/0.2.0/shipyard.lua shipyard
 ```
 
 ## Usage
